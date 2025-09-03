@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Getränkeliste – iPad (iOS 10 Kompatibel)</title>
+  <style>
+    body{margin:0;font-family:sans-serif;background:#f7fafc;color:#111;touch-action:manipulation;-webkit-user-select:none;user-select:none}
+    header{display:flex;justify-content:space-between;align-items:center;padding:20px;background:#fff;box-shadow:0 2px 5px rgba(0,0,0,.1);position:sticky;top:0;z-index:10}
+    h1{margin:0;font-size:36px}
+    .controls button{font-size:28px;padding:20px 28px;margin-left:10px;border-radius:16px;border:1px solid #ccc;box-shadow:0 4px 8px rgba(0,0,0,.1)}
+    section{padding:20px}
+
+    /* Big touch targets */
+    #nameGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}
+    .nameBtn{font-size:32px;padding:40px;border-radius:20px;border:2px solid #ccc;background:#fff;box-shadow:0 4px 8px rgba(0,0,0,.1);text-align:left}
+    .sub{font-size:22px;color:#555}
+
+    #drinkGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;margin-top:20px}
+    .drinkBtn{padding:30px;border-radius:20px;border:2px solid #ccc;background:#fff;box-shadow:0 4px 8px rgba(0,0,0,.1);font-size:28px}
+    .drinkHead{display:flex;justify-content:space-between;align-items:center;font-size:32px;margin-bottom:20px}
+    .counter{display:flex;align-items:center;justify-content:space-between}
+    .counter button{font-size:40px;padding:20px 40px;border-radius:16px;border:2px solid #ccc;background:#f0f0f0}
+    .count{font-size:36px;min-width:60px;text-align:center}
+
+    /* Person header with Undo on right */
+    #btnUndoPerson{font-size:26px;padding:14px 24px;margin-left:auto;border-radius:12px;border:2px solid #ccc;background:#ffe4e6}
+
+    /* Settings smaller */
+    input[type=text],input[type=number]{font-size:20px;padding:12px;border-radius:10px;border:2px solid #ccc;width:100%}
+    .item{margin-bottom:12px;background:#fff;padding:12px;border-radius:10px;box-shadow:0 2px 4px rgba(0,0,0,.1)}
+    .row button{font-size:20px;padding:12px 18px;margin-right:10px;border-radius:10px;border:2px solid #ccc}
+
+    table{width:100%;font-size:22px;border-collapse:collapse}
+    th,td{border:1px solid #ccc;padding:12px}
+
+    /* Screensaver */
+    #screensaver{position:fixed;inset:0;background:#000;display:none;z-index:999;}
+    #screensaver .bouncer{position:absolute;width:250px;height:250px;}
+    #screensaver .badge{width:220px;height:220px;border-radius:30px;display:grid;place-items:center;background:#000;overflow:hidden}
+    #screensaver img{max-width:180px;max-height:180px}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Getränkeliste</h1>
+    <div class="controls">
+      <button id="btnFront">Home</button>
+      <button id="btnSettings">Einstellungen</button>
+      <button id="btnOverview">Übersicht</button>
+    </div>
+  </header>
+
+  <section id="view-front">
+    <div id="nameGrid"></div>
+  </section>
+
+  <section id="view-person" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <h2 id="personTitle" style="font-size:34px;margin:0"></h2>
+      <button id="btnUndoPerson" disabled>Rückgängig</button>
+    </div>
+    <div id="personSum" style="font-size:28px;margin:10px 0">Summe: 0,00 €</div>
+    <div id="drinkGrid"></div>
+  </section>
+
+  <section id="view-overview" style="display:none">
+    <h2 style="font-size:34px">Übersicht</h2>
+    <table>
+      <thead id="ovHead"></thead>
+      <tbody id="ovBody"></tbody>
+    </table>
+  </section>
+
+  <section id="view-settings" style="display:none">
+    <h2 style="font-size:28px">Einstellungen</h2>
+    <div>
+      <h3 style="font-size:22px">Screensaver</h3>
+      <div class="item">
+        <label>Zeit (Sekunden): <input id="idleSec" type="number" min="10" step="5" value="60" style="width:120px"/></label>
+        <button id="btnSaveIdle">Speichern</button>
+      </div>
+      <div class="item">
+        <label>Eigenes Logo: <input id="logoUpload" type="file" accept="image/*"/></label>
+        <button id="btnClearLogo">Logo entfernen</button>
+      </div>
+
+      <h3 style="font-size:22px">Personen</h3>
+      <button id="btnAddPerson">+ Person</button>
+      <div id="peopleList"></div>
+      <h3 style="font-size:22px">Getränke</h3>
+      <button id="btnAddDrink">+ Getränk</button>
+      <div id="drinksList"></div>
+      <h3 style="font-size:22px">Export</h3>
+      <button id="btnExportCSV">Export CSV</button>
+      <button id="btnExportReset">Zähler zurücksetzen</button>
+      <button id="btnPrint">Drucken / PDF</button>
+    </div>
+  </section>
+
+  <div id="screensaver"><div class="bouncer" id="bouncer"><div class="badge" id="badge"></div></div></div>
+
+<script>
+// ==== iOS 10 kompatible Version (ES5, keine Arrow-Funktionen/Option-Objekte) ====
+var state={view:'front',currentPerson:null,people:[],drinks:[],counts:{},undo:[],idleSec:60,logo:null};
+function uid(){return Math.random().toString(36).slice(2,10);} 
+function fmt(n){return (n||0).toLocaleString('de-DE',{style:'currency',currency:'EUR'});} 
+
+function save(){try{localStorage.setItem('drinklist',JSON.stringify(state));}catch(e){}}
+function load(){var raw=localStorage.getItem('drinklist'); if(raw){try{var tmp=JSON.parse(raw); for(var k in tmp){state[k]=tmp[k];}}catch(e){}}
+  if(!state.people.length){state.people=[{id:uid(),name:'Max'}];}
+  if(!state.drinks.length){state.drinks=[{name:'Wasser',price:0},{name:'Cola',price:1.5}];}
+  render(); resetIdle(); applyLogo();}
+
+function show(viewId){document.getElementById('view-front').style.display=(viewId==='front')?'block':'none';
+  document.getElementById('view-person').style.display=(viewId==='person')?'block':'none';
+  document.getElementById('view-overview').style.display=(viewId==='overview')?'block':'none';
+  document.getElementById('view-settings').style.display=(viewId==='settings')?'block':'none';}
+function go(v){state.view=v; save(); render(); resetIdle();}
+
+function render(){show(state.view);
+  if(state.view==='front') renderFront();
+  if(state.view==='person') renderPerson();
+  if(state.view==='overview') renderOverview();
+  if(state.view==='settings') renderSettings();}
+
+function renderFront(){var g=document.getElementById('nameGrid'); g.innerHTML='';
+  for(var i=0;i<state.people.length;i++){var p=state.people[i];
+    var b=document.createElement('button'); b.className='nameBtn';
+    b.innerHTML=p.name+"<div class='sub'>"+fmt(sum(p.id))+"</div>";
+    (function(pid){ b.onclick=function(){ state.currentPerson=pid; go('person'); }; })(p.id);
+    g.appendChild(b);
+  }
+}
+function renderPerson(){var pid=state.currentPerson; var p=null; for(var i=0;i<state.people.length;i++){if(state.people[i].id===pid){p=state.people[i];break;}}
+  if(!p) return; document.getElementById('personTitle').textContent=p.name; document.getElementById('personSum').textContent='Summe: '+fmt(sum(pid));
+  var g=document.getElementById('drinkGrid'); g.innerHTML=''; if(!state.counts[pid]) state.counts[pid]={};
+  for(var i2=0;i2<state.drinks.length;i2++){(function(i){var d=state.drinks[i]; var cnt=(state.counts[pid][i]||0);
+      var el=document.createElement('div'); el.className='drinkBtn';
+      el.innerHTML="<div class='drinkHead'><span>"+d.name+"</span><span>"+fmt(d.price)+"</span></div>"+
+                   "<div class='counter'>"+
+                   "<button class='dec' data-i='"+i+"'>−</button>"+
+                   "<span class='count'>"+cnt+"</span>"+
+                   "<button class='inc' data-i='"+i+"'>+</button>"+
+                   "</div>";
+      el.onclick=function(e){e=e||window.event; var t=e.target||e.srcElement; if(!t || t.tagName!=='BUTTON') return; var idx=parseInt(t.getAttribute('data-i'),10); var delta=t.className==='inc'?1:-1; change(pid,idx,delta); };
+      g.appendChild(el);
+    })(i2);
+  }
+  document.getElementById('btnUndoPerson').disabled=!state.undo.length;
+}
+function renderOverview(){var h=document.getElementById('ovHead'), b=document.getElementById('ovBody'); h.innerHTML=''; b.innerHTML='';
+  var tr=document.createElement('tr'); var th=''; th+='<th>Person</th>'; for(var i=0;i<state.drinks.length;i++){th+='<th>'+state.drinks[i].name+'</th>';} th+='<th>Summe</th>'; tr.innerHTML=th; h.appendChild(tr);
+  for(var j=0;j<state.people.length;j++){var p=state.people[j]; var rec=state.counts[p.id]||{}; var td='<td>'+p.name+'</td>';
+    for(var k=0;k<state.drinks.length;k++){td+='<td>'+(rec[k]||0)+'</td>';}
+    td+='<td>'+fmt(sum(p.id))+'</td>'; var tr2=document.createElement('tr'); tr2.innerHTML=td; b.appendChild(tr2);
+  }
+}
+function renderSettings(){var idle=document.getElementById('idleSec'); idle.value=state.idleSec;}
+
+function sum(pid){var rec=state.counts[pid]||{}; var s=0; for(var i=0;i<state.drinks.length;i++){var d=state.drinks[i]; s+= (rec[i]||0) * (d.price||0);} return s;}
+function change(pid,i,delta){if(!state.counts[pid]) state.counts[pid]={}; var prev=state.counts[pid][i]||0; var next=Math.max(0, prev+delta); state.counts[pid][i]=next; state.undo.push({pid:pid, idx:i, prev:prev}); if(state.undo.length>100) state.undo.shift(); save(); render();}
+function undo(){var last=state.undo.pop(); if(!last) return; if(!state.counts[last.pid]) state.counts[last.pid]={}; state.counts[last.pid][last.idx]=last.prev; save(); render();}
+
+// --- Events (kein Options-Objekt, iOS 10) ---
+function $(id){return document.getElementById(id);} 
+$('btnFront').onclick=function(){go('front');};
+$('btnSettings').onclick=function(){go('settings');};
+$('btnOverview').onclick=function(){go('overview');};
+$('btnAddPerson').onclick=function(){var n=prompt('Name?'); if(!n) return; var p={id:uid(), name:n}; state.people.push(p); save(); render();};
+$('btnAddDrink').onclick=function(){var n=prompt('Getränk?'); if(!n) return; var pr=parseFloat(prompt('Preis?','0'))||0; state.drinks.push({name:n,price:pr}); save(); render();};
+$('btnExportCSV').onclick=function(){var rows=[['Person']]; for(var i=0;i<state.drinks.length;i++){rows[0].push(state.drinks[i].name);} rows[0].push('Summe');
+  for(var j=0;j<state.people.length;j++){var p=state.people[j]; var rec=state.counts[p.id]||{}; var r=[p.name]; for(var k=0;k<state.drinks.length;k++){r.push(rec[k]||0);} r.push(sum(p.id).toFixed(2)); rows.push(r);} 
+  var csv=''; for(var r=0;r<rows.length;r++){csv+=rows[r].join(',')+'\n';}
+  var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='liste.csv'; a.click();};
+$('btnExportReset').onclick=function(){ if(confirm('Alle Zähler löschen?')){ state.counts={}; state.undo=[]; save(); render(); } };
+$('btnPrint').onclick=function(){ window.print(); };
+$('btnUndoPerson').onclick=function(){ undo(); };
+$('btnSaveIdle').onclick=function(){ var v=parseInt($('idleSec').value,10); if(!isNaN(v) && v>=10){ state.idleSec=v; save(); resetIdle(); alert('Bildschirmzeit gespeichert: '+v+' Sekunden'); } };
+$('logoUpload').onchange=function(e){ var file=e.target.files && e.target.files[0]; if(!file) return; var r=new FileReader(); r.onload=function(){ state.logo=r.result; save(); applyLogo(); }; r.readAsDataURL(file); };
+$('btnClearLogo').onclick=function(){ state.logo=null; save(); applyLogo(); };
+
+function applyLogo(){var badge=$('badge'); while(badge.firstChild) badge.removeChild(badge.firstChild); if(state.logo){ var img=new Image(); img.src=state.logo; badge.appendChild(img); }}
+
+// --- Screensaver ---
+var idleTimer=null; function resetIdle(){ if(idleTimer) clearTimeout(idleTimer); idleTimer=setTimeout(function(){ showSaver(true); }, (state.idleSec||60)*1000); }
+function showSaver(sh){ var s=$('screensaver'); s.style.display= sh ? 'block' : 'none'; if(!sh) go('front'); }
+;['click','touchstart','keydown'].forEach(function(ev){ document.addEventListener(ev, function(){ if($('screensaver').style.display==='block'){ showSaver(false); } resetIdle(); }, false); });
+
+function bounce(){var el=$('bouncer'); if(!el) return; var x=40,y=40,vx=2,vy=2; function step(){ var W=window.innerWidth,H=window.innerHeight,w=el.offsetWidth,h=el.offsetHeight; x+=vx; y+=vy; if(x<=0||x+w>=W) vx*=-1; if(y<=0||y+h>=H) vy*=-1; el.style.transform='translate('+x+'px,'+y+'px)'; window.requestAnimationFrame(step);} step(); }
+
+window.onload=function(){ load(); bounce(); };
+</script>
+</body>
+</html>
